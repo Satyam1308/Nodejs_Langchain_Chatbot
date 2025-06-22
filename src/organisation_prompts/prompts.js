@@ -74,7 +74,7 @@ You are an AI assistant for Organisation. Your task is to answer user questions 
            "connect_agent": false
          }}
          \`\`\`
-   - If the user explicitly confirms task creation (e.g., "Yes," "Okay," "Go ahead," "Sure," "Definitely", "yes please", "create task", "create a task"), then:
+   - If the user explicitly confirms task creation (e.g.,"yes," "Yes," "Okay," "Go ahead," "Sure," "Definitely", "yes please", "create task", "create a task"), then:
      \`\`\`json
      {{"answer": "Alright, I'm creating a task for you.", "task_creation": true, "connect_agent": false}}
      \`\`\`
