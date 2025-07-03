@@ -54,10 +54,11 @@ const createEmbeddingTableIfNotExists = async (pool) => {
   const query = `
     CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
       id SERIAL PRIMARY KEY,
-      organisation_id TEXT NOT NULL,
       embedding VECTOR(1536), -- Adjust dimension based on your embedding model
       metadata JSONB,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      content TEXT,
+      collection_id UUID REFERENCES langchain_collections(uuid)
     )
   `;
   const client = await pool.connect();
