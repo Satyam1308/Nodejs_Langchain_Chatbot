@@ -23,7 +23,7 @@ const getOrCreateCollection = async (collectionName, embeddings) => {
     columns: {
       idColumnName: 'id',
       contentColumnName: 'content',
-      vectorColumnName: 'vector',
+      vectorColumnName: 'embedding',
       metadataColumnName: 'metadata',
       collectionIdColumnName: 'collection_id', // ✅ this is crucial
     },

@@ -54,12 +54,17 @@ const createEmbeddingSelection = async (data) => {
       columns: {
         idColumnName: 'id',
         contentColumnName: 'content',
-        vectorColumnName: 'vector',
+        vectorColumnName: 'embedding',
         metadataColumnName: 'metadata',
         collectionIdColumnName: 'collection_id', // 🔥 ADD THIS
       },
     });
     
+    // ✅ Delete existing embeddings for this organisation
+    await pool.query(
+      'DELETE FROM langchain_pg_embedding WHERE metadata->>\'organisation_id\' = $1',
+      [data.organisation_id]
+    );
 
     // ✅ Add Document to PGVector
     await vectorStore.addDocuments([

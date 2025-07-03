@@ -3,6 +3,7 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
 
 dotenv.config();
 
@@ -73,17 +74,45 @@ const getSessionChatHistory = async (organisationId) => {
       }
     },
     async getMessages() {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          'SELECT message FROM message_store WHERE session_id = $1 ORDER BY created_at',
-          [sessionId]
-        );
-        return result.rows.map(row => row.message);
-      } finally {
-        client.release();
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT message FROM message_store WHERE session_id = $1 ORDER BY created_at',
+      [sessionId]
+    );
+
+    return result.rows.map(row => {
+      const msg = row.message;
+      console.log('Retrieved message:', msg);
+      const type = msg?.id?.[2];
+
+      if (type === 'HumanMessage') {
+        return new HumanMessage({
+          content: msg.kwargs.content,
+          name: msg.kwargs.name,
+          additional_kwargs: msg.kwargs.additional_kwargs || {},
+          response_metadata: msg.kwargs.response_metadata || {},
+        });
       }
-    },
+
+      if (type === 'AIMessage') {
+        return new AIMessage({
+          content: msg.kwargs.content,
+          name: msg.kwargs.name,
+          additional_kwargs: msg.kwargs.additional_kwargs || {},
+          response_metadata: msg.kwargs.response_metadata || {},
+          tool_calls: msg.kwargs.tool_calls || [],
+          invalid_tool_calls: msg.kwargs.invalid_tool_calls || [],
+        });
+      }
+
+      // fallback
+      return null;
+    }).filter(Boolean); // remove nulls
+  } finally {
+    client.release();
+  }
+}
   };
 };
 

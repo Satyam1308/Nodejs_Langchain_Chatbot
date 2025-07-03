@@ -136,6 +136,7 @@ const chatBot = (temperature = 0.7) => {
         {
           question: data.user_query,
           context: contextWithAgents + agentInfo,
+          agent_status: data.agents_available,
         },
         { configurable: { sessionId: data.organisation_id } }
       );
