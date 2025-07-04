@@ -57,6 +57,7 @@ const createCollectionTableIfNotExists = async (pool) => {
     CREATE TABLE IF NOT EXISTS langchain_collections (
       uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
+      cmetadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
     )
   `;
