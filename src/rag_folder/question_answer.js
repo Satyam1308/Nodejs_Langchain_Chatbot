@@ -60,18 +60,18 @@ const chatBot = (temperature = 0.7) => {
       console.log('Retrieved Documents:', documents);
 
       // Get agent information from request data
-      const agentsAvailable = data.agents_available || false;
-      const availableAgents = data.available_agents || [];
+      // const agentsAvailable = data.agents_available || false;
+      // const availableAgents = data.available_agents || [];
       
-      console.log('Agent Status from request:', { agents_available: agentsAvailable, available_agents: availableAgents });
+      // console.log('Agent Status from request:', { agents_available: agentsAvailable, available_agents: availableAgents });
       
       // Create context with agent information
-      const contextWithAgents = documents.map(doc => doc.pageContent).join('\n\n');
-      const agentInfo = agentsAvailable && availableAgents.length > 0
-        ? `\n\nAgent Information: ${availableAgents.length} agent(s) available: ${availableAgents.map(agent => agent.name || agent).join(', ')}`
-        : '\n\nAgent Information: No agents currently available';
+      // const contextWithAgents = documents.map(doc => doc.pageContent).join('\n\n');
+      // const agentInfo = agentsAvailable && availableAgents.length > 0
+      //   ? `\n\nAgent Information: ${availableAgents.length} agent(s) available: ${availableAgents.map(agent => agent.name || agent).join(', ')}`
+      //   : '\n\nAgent Information: No agents currently available';
 
-      console.log('Agent Info being sent to AI:', agentInfo);
+      // console.log('Agent Info being sent to AI:', agentInfo);
 
       let prompt;
       try {
@@ -135,8 +135,8 @@ const chatBot = (temperature = 0.7) => {
       const generation = await chainWithHistory.invoke(
         {
           question: data.user_query,
-          context: contextWithAgents + agentInfo,
-          agent_status: data.agents_available,
+          context: documents.map(doc => doc.pageContent).join('\n\n'),
+          // agent_status: data.agents_available,
         },
         { configurable: { sessionId: data.organisation_id } }
       );
@@ -157,7 +157,7 @@ const chatBot = (temperature = 0.7) => {
         status: 500,
         question: data.user_query,
         answer: "Sorry, this query does not proceed.",
-        task_creation: true
+        task_creation: false
       };
     }
   };
