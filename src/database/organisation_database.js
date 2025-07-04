@@ -29,7 +29,7 @@ const close = async (pool) => {
 const createTableIfNotExists = async (pool) => {
   const query = `
     CREATE TABLE IF NOT EXISTS organisation_data (
-      organisation_id TEXT PRIMARY KEY,
+      organisation_id SERIAL PRIMARY KEY,
       organisation_data TEXT NOT NULL,
       ai_embeddings_status TEXT NOT NULL,
       ai_embeddings_reason TEXT,
@@ -50,14 +50,42 @@ const createTableIfNotExists = async (pool) => {
   }
 };
 
+const createCollectionTableIfNotExists = async (pool) => {
+  const query = `
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+    CREATE TABLE IF NOT EXISTS langchain_collections (
+      uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(query);
+    await client.query('COMMIT');
+    console.log('✅ langchain_collections table created or already exists.');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('❌ Failed to create langchain_collections table:', e.message);
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+
 const createEmbeddingTableIfNotExists = async (pool) => {
   const query = `
     CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
       id SERIAL PRIMARY KEY,
-      organisation_id TEXT NOT NULL,
       embedding VECTOR(1536), -- Adjust dimension based on your embedding model
       metadata JSONB,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      content TEXT,
+      collection_id UUID REFERENCES langchain_collections(uuid)
     )
   `;
   const client = await pool.connect();
@@ -110,24 +138,23 @@ const insertOrUpdateData = async (pool, data) => {
         throw new Error(`No organisation found with ID: ${data.organisation_id}`);
       }
     } else {
-      // 🆕 Insert new org (auto-generated ID)
-      const insertQuery = `
-        INSERT INTO organisation_data (
-          organisation_data, ai_embeddings_status, ai_embeddings_reason, created_at, modified_at
-        ) VALUES ($1, $2, $3, $4, $5)
-        RETURNING organisation_id
-      `;
-      const insertResult = await client.query(insertQuery, [
-        data.organisation_data,
-        data.ai_embeddings_status,
-        data.ai_embeddings_reason,
-        now,
-        now
-      ]);
-      const newId = insertResult.rows[0].organisation_id;
-      await client.query('COMMIT');
-      console.log('Record inserted.');
-      return newId;
+ const insertQuery = `
+  INSERT INTO organisation_data (
+    organisation_data, ai_embeddings_status, ai_embeddings_reason, created_at, modified_at
+  ) VALUES ($1, $2, $3, $4, $5)
+  RETURNING organisation_id
+`;
+const insertResult = await client.query(insertQuery, [
+  data.organisation_data,
+  data.ai_embeddings_status,
+  data.ai_embeddings_reason,
+  now,
+  now
+]);
+const newId = insertResult.rows[0].organisation_id;
+await client.query('COMMIT');
+console.log('Record inserted.');
+return newId;
     }
   } catch (e) {
     await client.query('ROLLBACK');
@@ -138,4 +165,4 @@ const insertOrUpdateData = async (pool, data) => {
 };
 
 
-export { connect, close, createTableIfNotExists, createEmbeddingTableIfNotExists, insertOrUpdateData };
+export { connect, close, createTableIfNotExists,createCollectionTableIfNotExists, createEmbeddingTableIfNotExists, insertOrUpdateData };
