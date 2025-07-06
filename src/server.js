@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import { connect, close, insertOrUpdateData, createTableIfNotExists, createEmbeddingTableIfNotExists, createCollectionTableIfNotExists } from './database/organisation_database.js';
+import { connect, insertOrUpdateData, createTableIfNotExists, createEmbeddingTableIfNotExists, createCollectionTableIfNotExists, updateLangchainCollectionsSchema } from './database/organisation_database.js';
 import { createEmbeddingSelection } from './organisation_embedding_creation/embedding_generation.js';
 import { getResponse } from './rag_folder/question_answer.js';
 import { setTimeout as delay } from 'timers/promises';
@@ -32,6 +32,7 @@ app.post('/api/organisation_database', async (req, res) => {
     await createTableIfNotExists(pool);
     await createCollectionTableIfNotExists(pool);
     await createEmbeddingTableIfNotExists(pool);
+    await updateLangchainCollectionsSchema(pool);
 
     const organisationDataFromFrontend = JSON.stringify(organisation_data);
 
@@ -66,8 +67,6 @@ app.post('/api/organisation_database', async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Error processing data', error: error.message });
-  } finally {
-    await close(pool);
   }
 });
 
