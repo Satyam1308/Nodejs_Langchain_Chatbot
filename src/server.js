@@ -71,7 +71,7 @@ app.post('/api/organisation_database', async (req, res) => {
 });
 
 app.post('/api/organisation_chatbot', async (req, res) => {
-  const { organisation_id, user_query, agents_available, available_agents } = req.body;
+  const { organisation_id, user_query, agents_available, available_agents, faqs } = req.body;
 
   if (!user_query) {
     return res.status(400).json({ message: 'Missing query' });
@@ -80,11 +80,14 @@ app.post('/api/organisation_chatbot', async (req, res) => {
     return res.status(400).json({ message: 'Missing Organisation ID' });
   }
 
+  console.log('Received request with FAQs:', faqs ? faqs.length : 0, 'FAQs');
+
   const data = {
     user_query,
     organisation_id: organisation_id.toString(),
     agents_available: agents_available || false,
     available_agents: available_agents || [],
+    faqs: faqs || [],
   };
 
   try {
