@@ -34,5 +34,6 @@ jobs:
             cd /root/apps/Nodejs_Langchain_Chatbot
             npm i
             node src/server.js
+            pm2 restart node-ai
             # npx tsc
             # pm2 restart ai-chatbot-backend  # or pm2 restart all if needed
