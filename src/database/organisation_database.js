@@ -51,23 +51,42 @@ const createTableIfNotExists = async (pool) => {
 };
 
 const createCollectionTableIfNotExists = async (pool) => {
-  const query = `
-    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-    CREATE TABLE IF NOT EXISTS langchain_collections (
+  const queries = [
+    `CREATE EXTENSION IF NOT EXISTS "vector"`,
+    `CREATE EXTENSION IF NOT EXISTS "pgcrypto"`,
+    `CREATE TABLE IF NOT EXISTS langchain_collections (
       uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
       cmetadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    )
-  `;
+    )`
+  ];
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(query);
+    
+    for (const query of queries) {
+      await client.query(query);
+    }
+    
     await client.query('COMMIT');
     console.log('✅ langchain_collections table created or already exists.');
+    
+    // Verify the table exists
+    const verifyQuery = `SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'langchain_collections'
+    )`;
+    const verifyResult = await pool.query(verifyQuery);
+    
+    if (verifyResult.rows[0].exists) {
+      console.log('✅ langchain_collections table verified successfully.');
+    } else {
+      throw new Error('langchain_collections table was not created properly');
+    }
+    
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('❌ Failed to create langchain_collections table:', e.message);
@@ -79,24 +98,47 @@ const createCollectionTableIfNotExists = async (pool) => {
 
 
 const createEmbeddingTableIfNotExists = async (pool) => {
-  const query = `
-    CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
+  const queries = [
+    `CREATE EXTENSION IF NOT EXISTS "vector"`,
+    `CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
       id SERIAL PRIMARY KEY,
-      embedding VECTOR(1536), -- Adjust dimension based on your embedding model
-      metadata JSONB,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      embedding VECTOR(1536),
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       content TEXT,
-      collection_id UUID REFERENCES langchain_collections(uuid)
-    )
-  `;
+      collection_id UUID REFERENCES langchain_collections(uuid) ON DELETE CASCADE
+    )`
+  ];
+  
   const client = await pool.connect();
   try {
-    await client.query(query);
-    await pool.query('COMMIT');
-    console.log('Embedding table created or already exists.');
+    await client.query('BEGIN');
+    
+    for (const query of queries) {
+      await client.query(query);
+    }
+    
+    await client.query('COMMIT');
+    console.log('✅ langchain_pg_embedding table created or already exists.');
+    
+    // Verify the table exists
+    const verifyQuery = `SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'langchain_pg_embedding'
+    )`;
+    const verifyResult = await pool.query(verifyQuery);
+    
+    if (verifyResult.rows[0].exists) {
+      console.log('✅ langchain_pg_embedding table verified successfully.');
+    } else {
+      throw new Error('langchain_pg_embedding table was not created properly');
+    }
+    
   } catch (e) {
-    await pool.query('ROLLBACK');
-    throw new Error(`Failed to create embedding table: ${e.message}`);
+    await client.query('ROLLBACK');
+    console.error('❌ Failed to create langchain_pg_embedding table:', e.message);
+    throw e;
   } finally {
     client.release();
   }
@@ -165,5 +207,34 @@ return newId;
   }
 };
 
+export const updateLangchainCollectionsSchema = async (pool) => {
+  try {
+    // Check if cmetadata column exists
+    const checkColumnQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'langchain_collections' 
+      AND column_name = 'cmetadata'
+    `;
+    
+    const columnExists = await pool.query(checkColumnQuery);
+    
+    if (columnExists.rows.length === 0) {
+      // Add the missing cmetadata column
+      const addColumnQuery = `
+        ALTER TABLE langchain_collections 
+        ADD COLUMN cmetadata JSONB
+      `;
+      
+      await pool.query(addColumnQuery);
+      console.log('Added cmetadata column to langchain_collections table');
+    } else {
+      console.log('cmetadata column already exists in langchain_collections table');
+    }
+  } catch (error) {
+    console.error('Error updating langchain_collections schema:', error);
+    throw error;
+  }
+};
 
 export { connect, close, createTableIfNotExists,createCollectionTableIfNotExists, createEmbeddingTableIfNotExists, insertOrUpdateData };

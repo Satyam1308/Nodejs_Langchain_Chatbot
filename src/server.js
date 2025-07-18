@@ -1,12 +1,25 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import { connect, close, insertOrUpdateData, createTableIfNotExists, createEmbeddingTableIfNotExists, createCollectionTableIfNotExists } from './database/organisation_database.js';
+import { connect, insertOrUpdateData, createTableIfNotExists, createEmbeddingTableIfNotExists, createCollectionTableIfNotExists, updateLangchainCollectionsSchema } from './database/organisation_database.js';
 import { createEmbeddingSelection } from './organisation_embedding_creation/embedding_generation.js';
 import { getResponse } from './rag_folder/question_answer.js';
 import { setTimeout as delay } from 'timers/promises';
+import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage } from '@langchain/core/messages';
+import { chatSummaryPrompt } from './organisation_prompts/prompts.js';
 
 dotenv.config();
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL_NAME = process.env.OPENAI_MODEL_NAME || 'gpt-4o';
+const OPENAI_TEMPERATURE = parseInt(process.env.OPENAI_TEMPERATURE || '0');
+
+const chatModel = new ChatOpenAI({
+        apiKey: OPENAI_API_KEY,
+        model: OPENAI_MODEL_NAME,
+        temperature: OPENAI_TEMPERATURE,
+      });
 
 const app = express();
 app.use(express.json());
@@ -32,6 +45,7 @@ app.post('/api/organisation_database', async (req, res) => {
     await createTableIfNotExists(pool);
     await createCollectionTableIfNotExists(pool);
     await createEmbeddingTableIfNotExists(pool);
+    await updateLangchainCollectionsSchema(pool);
 
     const organisationDataFromFrontend = JSON.stringify(organisation_data);
 
@@ -66,13 +80,11 @@ app.post('/api/organisation_database', async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Error processing data', error: error.message });
-  } finally {
-    await close(pool);
   }
 });
 
 app.post('/api/organisation_chatbot', async (req, res) => {
-  const { organisation_id, user_query, agents_available, available_agents } = req.body;
+  const { organisation_id, user_query, agents_available, available_agents, faqs } = req.body;
 
   if (!user_query) {
     return res.status(400).json({ message: 'Missing query' });
@@ -81,11 +93,14 @@ app.post('/api/organisation_chatbot', async (req, res) => {
     return res.status(400).json({ message: 'Missing Organisation ID' });
   }
 
+  console.log('Received request with FAQs:', faqs ? faqs.length : 0, 'FAQs');
+
   const data = {
     user_query,
     organisation_id: organisation_id.toString(),
     agents_available: agents_available || false,
     available_agents: available_agents || [],
+    faqs: faqs || [],
   };
 
   try {
@@ -96,6 +111,41 @@ app.post('/api/organisation_chatbot', async (req, res) => {
     res.status(500).json({ message: 'Error processing query', error: error.message });
   }
 });
+
+// to create chat summary
+app.post('/api/threadId/summary', async (req, res) => {
+  try {
+    const { messages } = req.body;
+   
+
+    if (!messages) {
+      return res.status(400).json({ message: 'messages not found' });
+    }
+
+      const prompt = chatSummaryPrompt(messages);
+      
+      const result = await chatModel.call([new HumanMessage(prompt)]);
+      let content = result.content;
+
+    // Remove markdown code block wrapper if present
+    if (content.startsWith('```json')) {
+      content = content.replace(/```json\n?/, '').replace(/```$/, '');
+    }
+
+    // Parse the content as JSON
+    const parsed = JSON.parse(content);
+    console.log(parsed)
+
+      return res.status(200).json({   data: parsed });
+    
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: 'Error in creating chat summary', err: err.message });
+  }
+});
+
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => logger.log(`Server running on port ${PORT}`));

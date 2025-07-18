@@ -59,19 +59,57 @@ const chatBot = (temperature = 0.7) => {
       const documents = retriever ? await retriever.getRelevantDocuments(data.user_query) : [];
       console.log('Retrieved Documents:', documents);
 
-      // Get agent information from request data
-      // const agentsAvailable = data.agents_available || false;
-      // const availableAgents = data.available_agents || [];
-      
-      // console.log('Agent Status from request:', { agents_available: agentsAvailable, available_agents: availableAgents });
-      
-      // Create context with agent information
-      // const contextWithAgents = documents.map(doc => doc.pageContent).join('\n\n');
-      // const agentInfo = agentsAvailable && availableAgents.length > 0
-      //   ? `\n\nAgent Information: ${availableAgents.length} agent(s) available: ${availableAgents.map(agent => agent.name || agent).join(', ')}`
-      //   : '\n\nAgent Information: No agents currently available';
+      // Search through provided FAQs for relevant matches
+      let relevantFAQs = [];
+      if (data.faqs && data.faqs.length > 0) {
+        console.log('Searching through', data.faqs.length, 'FAQs');
+        relevantFAQs = data.faqs.filter(faq => {
+          const question = faq.question?.toLowerCase() || '';
+          const answer = faq.answer?.toLowerCase() || '';
+          const query = data.user_query.toLowerCase();
+          
+          // Check if query words appear in question or answer
+          const queryWords = query.split(' ').filter(word => word.length > 2);
+          return queryWords.some(word => 
+            question.includes(word) || answer.includes(word)
+          );
+        });
+        console.log('Found', relevantFAQs.length, 'relevant FAQs');
+      }
 
-      // console.log('Agent Info being sent to AI:', agentInfo);
+      // Get agent information from request data
+      const agentsAvailable = data.agents_available || false;
+      const availableAgents = data.available_agents || [];
+      
+      console.log('Agent Status from request:', { agents_available: agentsAvailable, available_agents: availableAgents });
+      
+      // Create context with documents, FAQs, and agent information
+      const documentContext = documents.map(doc => doc.pageContent).join('\n\n');
+      const faqContext = relevantFAQs.length > 0 
+        ? '\n\nRelevant FAQs:\n' + relevantFAQs.map(faq => 
+            `Q: ${faq.question}\nA: ${faq.answer}`
+          ).join('\n\n')
+        : '';
+      
+      const fullContext = documentContext + faqContext;
+      
+      let agentInfo;
+      if (agentsAvailable && availableAgents.length > 0) {
+        const agentNames = availableAgents.map(agent => {
+          // Handle different possible agent data structures
+          if (typeof agent === 'string') return agent;
+          if (agent && typeof agent === 'object') {
+            return agent.agent_name || agent.name || agent.id || 'Unknown Agent';
+          }
+          return 'Unknown Agent';
+        });
+        agentInfo = `\n\nAgent Information: ${availableAgents.length} agent(s) available: ${agentNames.join(', ')}`;
+      } else {
+        agentInfo = '\n\nAgent Information: No agents currently available';
+      }
+
+      console.log('Agent Info being sent to AI:', agentInfo);
+      console.log('FAQ context being sent to AI:', faqContext ? 'Yes' : 'No');
 
       let prompt;
       try {
@@ -89,7 +127,7 @@ const chatBot = (temperature = 0.7) => {
       const ragChain = prompt.pipe(chatModel).pipe(new JsonOutputParser());
 
       const chainWithHistory = new RunnableWithMessageHistory({
-        runnable: ragChain,
+        runnable: ragChain,   
         getMessageHistory: async (sessionId) => ({
           async getMessages() {
             const history = await chatHistory.getMessages();
@@ -135,8 +173,8 @@ const chatBot = (temperature = 0.7) => {
       const generation = await chainWithHistory.invoke(
         {
           question: data.user_query,
-          context: documents.map(doc => doc.pageContent).join('\n\n'),
-          // agent_status: data.agents_available,
+          context: fullContext,
+          agent_status: agentsAvailable,
         },
         { configurable: { sessionId: data.organisation_id } }
       );
